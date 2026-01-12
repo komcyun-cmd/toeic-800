@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { DailyPlan, Task, TaskType } from '../types';
 import { getStudyContent } from '../services/gemini';
@@ -11,20 +12,33 @@ const Dashboard: React.FC<DashboardProps> = ({ plan, onTaskToggle }) => {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [studyData, setStudyData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [currentQuizIndex, setCurrentQuizIndex] = useState(0);
   const [quizAnswer, setQuizAnswer] = useState<number | null>(null);
+  const [showResult, setShowResult] = useState(false);
 
   const handleOpenStudy = async (task: Task) => {
     if (isLoading) return;
     setSelectedTask(task);
     setIsLoading(true);
+    setCurrentQuizIndex(0);
     setQuizAnswer(null);
+    setShowResult(false);
     try {
-      const data = await getStudyContent(task.title, task.description);
+      const data = await getStudyContent(task.title, task.description, task.duration);
       setStudyData(data);
     } catch (err) {
       console.error(err);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleNextQuiz = () => {
+    if (currentQuizIndex < (studyData?.quizzes?.length || 0) - 1) {
+      setCurrentQuizIndex(prev => prev + 1);
+      setQuizAnswer(null);
+    } else {
+      setShowResult(true);
     }
   };
 
@@ -38,6 +52,9 @@ const Dashboard: React.FC<DashboardProps> = ({ plan, onTaskToggle }) => {
       default: return '📝';
     }
   };
+
+  const currentQuiz = studyData?.quizzes?.[currentQuizIndex];
+  const progressPercent = studyData ? ((currentQuizIndex + (quizAnswer !== null ? 1 : 0)) / studyData.quizzes.length) * 100 : 0;
 
   return (
     <div className="max-w-4xl mx-auto pb-20 px-1">
@@ -100,13 +117,13 @@ const Dashboard: React.FC<DashboardProps> = ({ plan, onTaskToggle }) => {
 
       {selectedTask && (
         <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-slate-900/60 backdrop-blur-sm p-0 sm:p-4">
-          <div className="bg-white w-full max-w-3xl h-[90vh] sm:h-auto sm:max-h-[90vh] rounded-t-3xl sm:rounded-3xl overflow-hidden shadow-2xl flex flex-col">
+          <div className="bg-white w-full max-w-3xl h-[92vh] sm:h-auto sm:max-h-[92vh] rounded-t-3xl sm:rounded-3xl overflow-hidden shadow-2xl flex flex-col">
             <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-indigo-600 text-white shrink-0">
               <div className="flex items-center gap-3">
                 <span className="text-2xl">{getIcon(selectedTask.type)}</span>
                 <div>
                   <h2 className="font-bold text-base leading-tight">{selectedTask.title}</h2>
-                  <p className="text-[10px] opacity-80 uppercase font-bold tracking-widest">{selectedTask.type} Focus Session</p>
+                  <p className="text-[10px] opacity-80 uppercase font-bold tracking-widest">{selectedTask.duration}min Intesive Session</p>
                 </div>
               </div>
               <button 
@@ -117,70 +134,104 @@ const Dashboard: React.FC<DashboardProps> = ({ plan, onTaskToggle }) => {
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-6 sm:p-8 no-scrollbar">
+            <div className="flex-1 overflow-y-auto p-6 sm:p-8 no-scrollbar bg-white">
               {isLoading ? (
                 <div className="flex flex-col items-center justify-center py-20 space-y-4">
                   <div className="w-12 h-12 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
-                  <p className="text-slate-500 font-bold text-sm">AI 튜터가 학습 자료를 만들고 있어요...</p>
+                  <p className="text-slate-500 font-bold text-sm">AI가 {selectedTask.duration}분 분량의 커리큘럼을 짜고 있어요...</p>
                 </div>
               ) : studyData ? (
-                <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-10">
+                <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
+                  {/* Lesson Section */}
                   <section>
-                    <h3 className="text-indigo-600 font-black text-sm mb-3 flex items-center gap-2 uppercase tracking-widest">
+                    <h3 className="text-indigo-600 font-black text-sm mb-4 flex items-center gap-2 uppercase tracking-widest">
                       <span className="w-1.5 h-4 bg-indigo-600 rounded-full"></span>
-                      Core Strategy
+                      Today's Key Lesson
                     </h3>
-                    <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100 text-slate-700 leading-relaxed whitespace-pre-wrap text-sm sm:text-base">
+                    <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 text-slate-700 leading-relaxed whitespace-pre-wrap text-sm sm:text-base shadow-inner">
                       {studyData.lesson}
                     </div>
                   </section>
 
+                  {/* Examples Section */}
                   <section>
-                    <h3 className="text-slate-800 font-black text-sm mb-3 uppercase tracking-widest">Context Examples</h3>
-                    <div className="space-y-3">
+                    <h3 className="text-slate-800 font-black text-sm mb-4 uppercase tracking-widest">Business Context Examples ({studyData.examples.length})</h3>
+                    <div className="grid grid-cols-1 gap-3">
                       {studyData.examples.map((ex: any, i: number) => (
-                        <div key={i} className="p-4 rounded-xl border border-slate-100 bg-white shadow-sm">
+                        <div key={i} className="p-5 rounded-xl border border-slate-100 bg-white shadow-sm hover:border-indigo-100 transition-colors">
                           <p className="font-bold text-indigo-900 text-base sm:text-lg">"{ex.sentence}"</p>
-                          <p className="text-xs text-slate-500 mt-1 font-medium">{ex.translation}</p>
+                          <p className="text-xs text-slate-500 mt-2 font-medium bg-slate-50 inline-block px-2 py-1 rounded">{ex.translation}</p>
                         </div>
                       ))}
                     </div>
                   </section>
 
-                  <section className="bg-indigo-50 p-6 sm:p-8 rounded-3xl border border-indigo-100">
-                    <h3 className="text-indigo-900 font-black text-sm mb-4 uppercase tracking-widest">
-                      Daily Mini Quiz
-                    </h3>
-                    <p className="text-slate-800 font-bold mb-6 text-sm sm:text-base leading-relaxed">{studyData.quiz.question}</p>
-                    <div className="grid grid-cols-1 gap-2">
-                      {studyData.quiz.options.map((opt: string, i: number) => (
-                        <button
-                          key={i}
-                          onClick={() => setQuizAnswer(i)}
-                          className={`p-4 rounded-xl text-left text-xs sm:text-sm font-bold transition-all ${
-                            quizAnswer === i 
-                              ? (i === studyData.quiz.answer ? 'bg-green-500 text-white shadow-lg' : 'bg-rose-500 text-white shadow-lg')
-                              : 'bg-white border border-indigo-100 text-slate-700 active:bg-indigo-50'
-                          }`}
-                        >
-                          <span className="mr-2 opacity-40">{String.fromCharCode(65 + i)})</span> {opt}
-                        </button>
-                      ))}
+                  {/* Quiz Section */}
+                  <section className="bg-slate-900 p-6 sm:p-10 rounded-3xl text-white shadow-2xl relative overflow-hidden">
+                    <div className="absolute top-0 left-0 w-full h-1 bg-slate-800">
+                      <div 
+                        className="h-full bg-indigo-500 transition-all duration-500" 
+                        style={{ width: `${progressPercent}%` }}
+                      ></div>
                     </div>
-                    {quizAnswer !== null && (
-                      <div className="mt-6 animate-in zoom-in duration-300">
-                        <div className={`p-5 rounded-2xl ${quizAnswer === studyData.quiz.answer ? 'bg-green-100 text-green-800' : 'bg-rose-100 text-rose-800'}`}>
-                          <p className="font-black text-sm">{quizAnswer === studyData.quiz.answer ? '정답입니다! 🎉' : '다시 확인해볼까요?'}</p>
-                          <p className="text-[11px] sm:text-xs mt-2 leading-relaxed font-medium">{studyData.quiz.explanation}</p>
+
+                    {!showResult ? (
+                      <div className="animate-in fade-in duration-500">
+                        <div className="flex justify-between items-center mb-6">
+                           <h3 className="text-indigo-400 font-black text-xs uppercase tracking-widest">
+                            Mini Quiz {currentQuizIndex + 1} / {studyData.quizzes.length}
+                          </h3>
                         </div>
+                        
+                        <p className="text-lg sm:text-xl font-bold mb-8 leading-relaxed">
+                          {currentQuiz.question}
+                        </p>
+
+                        <div className="grid grid-cols-1 gap-3">
+                          {currentQuiz.options.map((opt: string, i: number) => (
+                            <button
+                              key={i}
+                              disabled={quizAnswer !== null}
+                              onClick={() => setQuizAnswer(i)}
+                              className={`p-5 rounded-2xl text-left text-sm font-bold transition-all border-2 ${
+                                quizAnswer === i 
+                                  ? (i === currentQuiz.answer ? 'bg-green-600 border-green-500 text-white shadow-lg scale-[1.02]' : 'bg-rose-600 border-rose-500 text-white shadow-lg scale-[1.02]')
+                                  : (quizAnswer !== null && i === currentQuiz.answer ? 'bg-green-600/20 border-green-500 text-green-400' : 'bg-slate-800 border-slate-700 hover:border-indigo-500 text-slate-300')
+                              }`}
+                            >
+                              <span className="mr-3 opacity-40">{String.fromCharCode(65 + i)})</span> {opt}
+                            </button>
+                          ))}
+                        </div>
+
+                        {quizAnswer !== null && (
+                          <div className="mt-8 animate-in slide-in-from-top-4 duration-300">
+                            <div className={`p-6 rounded-2xl ${quizAnswer === currentQuiz.answer ? 'bg-green-900/30 border border-green-500/50' : 'bg-rose-900/30 border border-rose-500/50'}`}>
+                              <p className="font-black text-sm mb-2">{quizAnswer === currentQuiz.answer ? 'Excellent! 🎉' : 'Needs Review'}</p>
+                              <p className="text-xs sm:text-sm leading-relaxed text-slate-300 font-medium">{currentQuiz.explanation}</p>
+                            </div>
+                            <button 
+                              onClick={handleNextQuiz}
+                              className="w-full mt-6 py-5 bg-indigo-600 text-white rounded-2xl font-black text-base hover:bg-indigo-700 active:scale-[0.98] transition-all shadow-xl shadow-indigo-900/20 uppercase tracking-widest"
+                            >
+                              {currentQuizIndex < studyData.quizzes.length - 1 ? 'Next Question' : 'Show Summary'}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="text-center py-10 animate-in zoom-in duration-500">
+                        <div className="text-6xl mb-6">🏆</div>
+                        <h3 className="text-2xl font-black mb-2">Lesson Complete!</h3>
+                        <p className="text-slate-400 mb-8 font-medium">{studyData.quizzes.length}개의 고난도 퀴즈를 모두 정복했습니다.</p>
                         <button 
                           onClick={() => {
                             onTaskToggle(selectedTask.id);
                             setSelectedTask(null);
                           }}
-                          className="w-full mt-4 py-4 bg-indigo-600 text-white rounded-2xl font-black text-sm hover:bg-indigo-700 active:scale-[0.98] transition-all shadow-lg shadow-indigo-200 uppercase tracking-widest"
+                          className="w-full py-5 bg-green-500 text-white rounded-2xl font-black text-base hover:bg-green-600 active:scale-[0.98] transition-all shadow-xl shadow-green-900/20 uppercase tracking-widest"
                         >
-                          Finish Learning
+                          Complete Day Task
                         </button>
                       </div>
                     )}
@@ -188,8 +239,8 @@ const Dashboard: React.FC<DashboardProps> = ({ plan, onTaskToggle }) => {
                 </div>
               ) : (
                 <div className="text-center py-20">
-                   <p className="text-slate-500 font-bold">자료를 불러오는데 실패했습니다.</p>
-                   <button onClick={() => setSelectedTask(null)} className="mt-4 text-indigo-600 font-bold underline">닫기</button>
+                   <p className="text-slate-500 font-bold">자료를 구성하는 중 오류가 발생했습니다.</p>
+                   <button onClick={() => setSelectedTask(null)} className="mt-4 text-indigo-600 font-bold underline">돌아가기</button>
                 </div>
               )}
             </div>
