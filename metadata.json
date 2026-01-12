@@ -1,0 +1,7 @@
+{
+  "name": "TOEIC 800 Sprint: 21 Days",
+  "description": "수능 2등급 학생을 위한 3주 완성 토익 800점 달성 프로젝트. AI 튜터와 함께하는 맞춤형 커리큘럼 앱입니다.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
