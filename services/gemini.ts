@@ -22,17 +22,23 @@ export const getAITutorResponse = async (userMessage: string, context: string) =
   }
 };
 
-export const getStudyContent = async (taskTitle: string, taskDescription: string) => {
+export const getStudyContent = async (taskTitle: string, taskDescription: string, duration: number) => {
   try {
+    // 시간에 따른 콘텐츠 양 조절 (30분이면 약 5문제, 60분이면 약 10문제 목표)
+    const quizCount = Math.max(3, Math.min(10, Math.floor(duration / 10 + 2)));
+    const exampleCount = Math.max(5, Math.min(15, Math.floor(duration / 5)));
+
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: `토익 800점을 목표로 하는 학생을 위해 다음 주제에 대한 학습 내용을 생성해주세요:
+      contents: `토익 800점을 목표로 하는 학생을 위해 다음 주제에 대해 ${duration}분 분량의 심도 있는 학습 내용을 생성해주세요:
       주제: ${taskTitle} (${taskDescription})
       
-      형식: JSON으로 다음 정보를 포함하세요.
-      1. lesson: 핵심 이론 설명 (Markdown 형식, 한국어)
-      2. examples: 실전 예문 3개와 해석
-      3. quiz: 관련 퀴즈 1문제 (문제, 보기 4개, 정답 인덱스, 해설)`,
+      지침:
+      1. lesson: 800점 돌파를 위한 핵심 비법과 수능 영어와의 차이점을 명확히 짚어주는 심화 이론 (Markdown 형식)
+      2. examples: 실전 비즈니스 맥락이 담긴 예문 ${exampleCount}개와 해석
+      3. quizzes: 주제와 관련된 실전 형식 퀴즈 ${quizCount}문제 (객관식 4지선다)
+
+      형식: 반드시 JSON으로 응답하세요.`,
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -49,17 +55,20 @@ export const getStudyContent = async (taskTitle: string, taskDescription: string
                 }
               }
             },
-            quiz: {
-              type: Type.OBJECT,
-              properties: {
-                question: { type: Type.STRING },
-                options: { type: Type.ARRAY, items: { type: Type.STRING } },
-                answer: { type: Type.INTEGER },
-                explanation: { type: Type.STRING }
+            quizzes: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  question: { type: Type.STRING },
+                  options: { type: Type.ARRAY, items: { type: Type.STRING } },
+                  answer: { type: Type.INTEGER },
+                  explanation: { type: Type.STRING }
+                }
               }
             }
           },
-          required: ["lesson", "examples", "quiz"]
+          required: ["lesson", "examples", "quizzes"]
         }
       }
     });
